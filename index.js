@@ -60,6 +60,23 @@ async function run() {
 
       // console.log(result);
     });
+    // Latest Pending Issues (limit 6)
+    // Latest Pending Issues (limit 6)
+    app.get("/reports/pending", async (req, res) => {
+      try {
+        const result = await reportsCollection
+          .find({ status: { $regex: /^pending$/i } }) // case-insensitive match
+          .sort({ createdAt: -1 }) // latest first
+          .limit(6)
+          .toArray();
+        res.send(result);
+      } catch (err) {
+        res
+          .status(500)
+          .send({ message: "Failed to fetch pending issues", err });
+      }
+    });
+
     //! issue Detaails
     app.get("/reports/:id", async (req, res) => {
       const id = req.params.id;
@@ -70,13 +87,24 @@ async function run() {
       // console.log(result);
     });
     //! reports post---
-    app.post("/reports", async (req, res) => {
-      const reportData = req.body;
-      const result = await reportsCollection.insertOne(reportData);
-      
-      // await myReportsCollection.insertOne(reportData);
+    // app.post("/reports", async (req, res) => {
+    //   const reportData = req.body;
+    //   const result = await reportsCollection.insertOne(reportData);
 
-      res.send(result);
+    //   // await myReportsCollection.insertOne(reportData);
+
+    //   res.send(result);
+    // });
+    app.post("/reports", async (req, res) => {
+      try {
+        // add createdAt timestamp
+        const reportData = { ...req.body, createdAt: new Date() };
+
+        const result = await reportsCollection.insertOne(reportData);
+        res.send(result);
+      } catch (err) {
+        res.status(500).send({ message: "Failed to insert report", err });
+      }
     });
 
     // citizen Part
