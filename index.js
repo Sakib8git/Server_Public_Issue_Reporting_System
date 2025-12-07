@@ -1,7 +1,7 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const admin = require("firebase-admin");
 const port = process.env.PORT || 3000;
 const decoded = Buffer.from(process.env.FB_SERVICE_KEY, "base64").toString(
@@ -52,20 +52,47 @@ async function run() {
     //! ----------------------------
     const db = client.db("reportHub");
     const reportsCollection = db.collection("reports");
-    // card data
+    // const myReportsCollection = db.collection("my-reports");
+    //! All Issues
     app.get("/reports", async (req, res) => {
       const result = await reportsCollection.find().toArray();
       res.send(result);
 
-      console.log(result);
+      // console.log(result);
     });
-    // reports post---
+    //! issue Detaails
+    app.get("/reports/:id", async (req, res) => {
+      const id = req.params.id;
+      const cursore = { _id: new ObjectId(id) };
+      const result = await reportsCollection.findOne(cursore);
+      res.send(result);
+
+      // console.log(result);
+    });
+    //! reports post---
     app.post("/reports", async (req, res) => {
       const reportData = req.body;
       const result = await reportsCollection.insertOne(reportData);
+      
+      // await myReportsCollection.insertOne(reportData);
+
       res.send(result);
     });
-    //! ----------------------------
+
+    // citizen Part
+    // My issues
+    app.get("/dashboard/my-issues", verifyJWT, async (req, res) => {
+      const email = req.tokenEmail;
+      const result = await reportsCollection
+        .find({ "reporter.email": email })
+        .toArray();
+      res.send(result);
+
+      // console.log(result);
+    });
+
+    //* ----------------------------
+    //* ----------------------------
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
