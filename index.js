@@ -107,8 +107,8 @@ async function run() {
       }
     });
 
-    // citizen Part
-    // My issues
+    //  ----------------------------citizen---------------------------------
+    //?note: My issues
     app.get("/dashboard/my-issues", verifyJWT, async (req, res) => {
       const email = req.tokenEmail;
       const result = await reportsCollection
@@ -118,7 +118,31 @@ async function run() {
 
       // console.log(result);
     });
-    // Delete issue
+    //*note: edit
+    app.patch("/reports/:id", verifyJWT, async (req, res) => {
+      try {
+        const id = req.params.id;
+        const email = req.tokenEmail;
+        const updateData = req.body;
+
+        const result = await reportsCollection.updateOne(
+          {
+            _id: new ObjectId(id),
+            "reporter.email": email,
+            status: "Pending", // still only editable if Pending
+          },
+          {
+            $set: updateData,
+          }
+        );
+
+        // No 403 check, just send result back
+        res.send(result);
+      } catch (err) {
+        res.status(500).send({ message: "Failed to update issue", err });
+      }
+    });
+    //!note: Delete issue
     app.delete("/reports/:id", verifyJWT, async (req, res) => {
       try {
         const id = req.params.id;
@@ -129,7 +153,7 @@ async function run() {
           "reporter.email": email,
         });
 
-        res.send(result); 
+        res.send(result);
       } catch (err) {
         res.status(500).send({ message: "Failed to delete issue", err });
       }
