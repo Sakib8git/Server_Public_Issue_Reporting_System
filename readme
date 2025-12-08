@@ -1,0 +1,28 @@
+app.post("/create-checkout-session", async (req, res) => {
+      const paymentInfo = req.body;
+      const amount = paymentInfo?.price * 100;
+      const session = await stripe.checkout.sessions.create({
+        line_items: [
+          {
+            price_data: {
+              currency: "USD",
+              unit_amount: amount,
+              product_data: {
+                name: paymentInfo?.name,
+                discription: paymentInfo?.discription,
+                images: [paymentInfo?.image],
+              },
+            },
+            quantity: paymentInfo?.quantity,
+          },
+        ],
+        customer_email: paymentInfo.customer.email,
+        mode: "payment",
+        metadata: {
+          plantId: paymentInfo?.plantId,
+          customer: paymentInfo?.customer.email,
+        },
+        success_url: `${process.env.CLINT_DOMAIN}/paymentSuccess?session_id={CHECKOUT_SESSION_ID}`,
+        // success_url: `${process.env.CLINT_DOMAIN}/paymentSuccess?success=true`,
+        cancel_url: `${process.env.CLINT_DOMAIN}/plant/${paymentInfo?.plantId}`,
+      });

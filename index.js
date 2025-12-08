@@ -2,7 +2,9 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
+// const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const admin = require("firebase-admin");
+const { default: Stripe } = require("stripe");
 const port = process.env.PORT || 3000;
 const decoded = Buffer.from(process.env.FB_SERVICE_KEY, "base64").toString(
   "utf-8"
@@ -52,6 +54,7 @@ async function run() {
     //! ----------------------------
     const db = client.db("reportHub");
     const reportsCollection = db.collection("reports");
+    const staffCollection = db.collection("staff");
     // const myReportsCollection = db.collection("my-reports");
     //! All Issues
     app.get("/reports", async (req, res) => {
@@ -106,24 +109,35 @@ async function run() {
         res.status(500).send({ message: "Failed to insert report", err });
       }
     });
-    // upvote count
+    //! upvote count
     app.patch("/reports/:id/upvote", verifyJWT, async (req, res) => {
       try {
         const id = req.params.id;
         const email = req.tokenEmail;
 
-        // already upvot
+        // Find issue
         const issue = await reportsCollection.findOne({
           _id: new ObjectId(id),
         });
         if (!issue) {
           return res.status(404).send({ message: "Issue not found" });
         }
+
+        // ❌ Prevent self-upvote
+        if (issue.reporter?.email === email) {
+          return res
+            .status(403)
+            .send({ message: "You cannot upvote your own issue" });
+        }
+
+        // ❌ Prevent duplicate upvote
         if (issue.upvoters && issue.upvoters.includes(email)) {
           return res
             .status(400)
             .send({ message: "You have already upvoted this issue" });
         }
+
+        // ✅ Update: increment upvote + add user email
         const result = await reportsCollection.updateOne(
           { _id: new ObjectId(id) },
           {
@@ -162,7 +176,10 @@ async function run() {
             status: "Pending", // still only editable if Pending
           },
           {
-            $set: updateData,
+            $set: {
+              ...updateData,
+              lastUpdated: new Date(), // ✅ add/update timestamp
+            },
           }
         );
 
@@ -188,8 +205,105 @@ async function run() {
         res.status(500).send({ message: "Failed to delete issue", err });
       }
     });
+    //Todo: payment-- for boost
+    // app.post("/create-checkout-session", verifyJWT, async (req, res) => {
+    //   try {
+    //     const paymentInfo = req.body;
+    //     const issueId = paymentInfo.issueId;
+    //     const amount = 100 * 100; // 100 Taka → Stripe expects smallest unit (paisa/cents)
 
-    //* ----------------------------
+    //     // Create Stripe Checkout Session
+    //     const session = await stripe.checkout.sessions.create({
+    //       line_items: [
+    //         {
+    //           price_data: {
+    //             currency: "usd", // Stripe does not support BDT directly, so use USD or test currency
+    //             unit_amount: amount,
+    //             product_data: {
+    //               name: "Boost Issue Priority",
+    //               description: `Boosting issue: ${paymentInfo?.title}`,
+    //               images: [paymentInfo?.image],
+    //             },
+    //           },
+    //           quantity: 1,
+    //         },
+    //       ],
+    //       // ✅ Use reporter email instead of customer
+    //       customer_email: paymentInfo.reporter.email,
+    //       mode: "payment",
+    //       metadata: {
+    //         issueId: issueId,
+    //         reporter: paymentInfo.reporter.email, // ✅ store reporter email in metadata
+    //       },
+    //       success_url: `${process.env.CLIENT_DOMAIN}/paymentSuccess?session_id={CHECKOUT_SESSION_ID}`,
+    //       cancel_url: `${process.env.CLIENT_DOMAIN}/issue-details/${issueId}`,
+    //     });
+
+    //     res.json({ id: session.id });
+    //   } catch (err) {
+    //     console.error("Stripe Checkout Error:", err);
+    //     res
+    //       .status(500)
+    //       .send({ message: "Failed to create checkout session", err });
+    //   }
+    // });
+
+    //* ---------Admin----------------
+    // add staff
+    app.post("/staff", async (req, res) => {
+      try {
+        // add createdAt timestamp
+        const staffData = { ...req.body, createdAt: new Date() };
+
+        const result = await staffCollection.insertOne(staffData);
+        res.send(result);
+      } catch (err) {
+        res.status(500).send({ message: "Failed to insert report", err });
+      }
+    });
+    // get all staff
+    app.get("/staff", async (req, res) => {
+      try {
+        const staff = await staffCollection.find().toArray();
+        res.send(staff);
+      } catch (err) {
+        res.status(500).send({ message: "Failed to fetch staff", err });
+      }
+    });
+
+    // update staff
+    app.patch("/staff/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const updateData = req.body; // frontend theke updated staff info asbe
+
+        const result = await staffCollection.updateOne(
+          { _id: new ObjectId(id) }, // filter
+          { $set: updateData } // update operation
+        );
+
+        res.send(result);
+      } catch (err) {
+        res.status(500).send({ message: "Failed to update staff", err });
+      }
+    });
+    // delete
+    app.delete("/staff/:id", verifyJWT, async (req, res) => {
+      try {
+        const id = req.params.id;
+        // const email = req.tokenEmail;
+
+        const result = await staffCollection.deleteOne({
+          _id: new ObjectId(id),
+          // "reporter.email": email,
+        });
+
+        res.send(result);
+      } catch (err) {
+        res.status(500).send({ message: "Failed to delete issue", err });
+      }
+    });
+
     //* ----------------------------
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
