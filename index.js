@@ -60,8 +60,8 @@ async function run() {
 
       // console.log(result);
     });
-    // Latest Pending Issues (limit 6)
-    // Latest Pending Issues (limit 6)
+
+    //fixme: Latest Pending Issues (limit 6)
     app.get("/reports/pending", async (req, res) => {
       try {
         const result = await reportsCollection
@@ -76,7 +76,7 @@ async function run() {
           .send({ message: "Failed to fetch pending issues", err });
       }
     });
-
+    // --------------------------------------------
     //! issue Detaails
     app.get("/reports/:id", async (req, res) => {
       const id = req.params.id;
@@ -106,7 +106,37 @@ async function run() {
         res.status(500).send({ message: "Failed to insert report", err });
       }
     });
+    // upvote count
+    app.patch("/reports/:id/upvote", verifyJWT, async (req, res) => {
+      try {
+        const id = req.params.id;
+        const email = req.tokenEmail;
 
+        // already upvot
+        const issue = await reportsCollection.findOne({
+          _id: new ObjectId(id),
+        });
+        if (!issue) {
+          return res.status(404).send({ message: "Issue not found" });
+        }
+        if (issue.upvoters && issue.upvoters.includes(email)) {
+          return res
+            .status(400)
+            .send({ message: "You have already upvoted this issue" });
+        }
+        const result = await reportsCollection.updateOne(
+          { _id: new ObjectId(id) },
+          {
+            $inc: { upvote: 1 },
+            $push: { upvoters: email },
+          }
+        );
+
+        res.send({ message: "Upvote successful", result });
+      } catch (err) {
+        res.status(500).send({ message: "Failed to upvote issue", err });
+      }
+    });
     //  ----------------------------citizen---------------------------------
     //?note: My issues
     app.get("/dashboard/my-issues", verifyJWT, async (req, res) => {
