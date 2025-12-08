@@ -118,6 +118,22 @@ async function run() {
 
       // console.log(result);
     });
+    // Delete issue
+    app.delete("/reports/:id", verifyJWT, async (req, res) => {
+      try {
+        const id = req.params.id;
+        const email = req.tokenEmail;
+
+        const result = await reportsCollection.deleteOne({
+          _id: new ObjectId(id),
+          "reporter.email": email,
+        });
+
+        res.send(result); 
+      } catch (err) {
+        res.status(500).send({ message: "Failed to delete issue", err });
+      }
+    });
 
     //* ----------------------------
     //* ----------------------------
