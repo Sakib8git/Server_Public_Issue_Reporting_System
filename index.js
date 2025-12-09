@@ -80,8 +80,8 @@ async function run() {
       try {
         const result = await commentsCollection
           .find()
-          .sort({ createdAt: -1 }) 
-          .limit(3) 
+          .sort({ createdAt: -1 })
+          .limit(3)
           .toArray();
 
         res.send(result);
@@ -360,6 +360,17 @@ async function run() {
       } catch (err) {
         res.status(500).send({ message: "Failed to delete issue", err });
       }
+    });
+    // block citizen
+    app.patch("/citizen/:id", async (req, res) => {
+      const id = req.params.id;
+      const { action } = req.body; 
+      const result = await citizenCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: { action } }
+      );
+
+      res.send(result);
     });
 
     //* ----------------------------
