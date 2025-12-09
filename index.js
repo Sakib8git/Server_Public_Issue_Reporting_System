@@ -56,7 +56,39 @@ async function run() {
     const citizenCollection = db.collection("citizen");
     const reportsCollection = db.collection("reports");
     const staffCollection = db.collection("staff");
+    const commentsCollection = db.collection("comments");
     // const myReportsCollection = db.collection("my-reports");
+
+    // comments post
+    app.post("/comments", verifyJWT, async (req, res) => {
+      try {
+        const email = req.tokenEmail;
+        const commentData = {
+          ...req.body,
+          email,
+          createdAt: new Date(),
+        };
+
+        const result = await commentsCollection.insertOne(commentData);
+        res.send(result);
+      } catch (err) {
+        res.status(500).send({ message: "Failed to insert comment", err });
+      }
+    });
+    // all comments
+    app.get("/comments", async (req, res) => {
+      try {
+        const result = await commentsCollection
+          .find()
+          .sort({ createdAt: -1 }) 
+          .limit(3) 
+          .toArray();
+
+        res.send(result);
+      } catch (err) {
+        res.status(500).send({ message: "Failed to fetch comments", err });
+      }
+    });
     //! All Issues
     app.get("/reports", async (req, res) => {
       const result = await reportsCollection.find().toArray();
