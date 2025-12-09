@@ -89,6 +89,29 @@ async function run() {
         res.status(500).send({ message: "Failed to fetch comments", err });
       }
     });
+    // roll of user
+    app.get("/user/role/:email", async (req, res) => {
+      const email = req.params.email;
+
+      // check citizen (including admin flag)
+      const citizen = await citizenCollection.findOne({ email });
+      if (citizen) {
+        // jodi citizen er document e admin flag thake
+        if (citizen.role === "admin") {
+          return res.send({ role: "admin" });
+        }
+        return res.send({ role: "citizen" });
+      }
+
+      // check staff
+      const staff = await staffCollection.findOne({ email });
+      if (staff) {
+        return res.send({ role: "staff" });
+      }
+
+      // fallback
+      res.send({ role: "guest" });
+    });
     //! All Issues
     app.get("/reports", async (req, res) => {
       const result = await reportsCollection.find().toArray();
@@ -210,6 +233,33 @@ async function run() {
       }
     });
     //  ----------------------------citizen---------------------------------
+    //*note: edit profile
+    app.patch("/citizen", verifyJWT, async (req, res) => {
+      try {
+        
+        const email = req.tokenEmail;
+        const updateData = req.body;
+
+        const result = await citizenCollection.updateOne(
+          {
+            _id: new ObjectId(id),
+            "reporter.email": email,
+            status: "Pending", // still only editable if Pending
+          },
+          {
+            $set: {
+              ...updateData,
+              lastUpdated: new Date(), // ✅ add/update timestamp
+            },
+          }
+        );
+
+        // No 403 check, just send result back
+        res.send(result);
+      } catch (err) {
+        res.status(500).send({ message: "Failed to update issue", err });
+      }
+    });
     //?note: My issues
     app.get("/dashboard/my-issues", verifyJWT, async (req, res) => {
       const email = req.tokenEmail;
@@ -220,7 +270,7 @@ async function run() {
 
       // console.log(result);
     });
-    //*note: edit
+    //*note: edit issue
     app.patch("/reports/:id", verifyJWT, async (req, res) => {
       try {
         const id = req.params.id;
@@ -364,7 +414,7 @@ async function run() {
     // block citizen
     app.patch("/citizen/:id", async (req, res) => {
       const id = req.params.id;
-      const { action } = req.body; 
+      const { action } = req.body;
       const result = await citizenCollection.updateOne(
         { _id: new ObjectId(id) },
         { $set: { action } }
