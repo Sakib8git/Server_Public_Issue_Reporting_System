@@ -53,6 +53,7 @@ async function run() {
   try {
     //! ----------------------------
     const db = client.db("reportHub");
+    const citizenCollection = db.collection("citizen");
     const reportsCollection = db.collection("reports");
     const staffCollection = db.collection("staff");
     // const myReportsCollection = db.collection("my-reports");
@@ -62,6 +63,31 @@ async function run() {
       res.send(result);
 
       // console.log(result);
+    });
+
+    //! All citizen
+    app.get("/citizen", async (req, res) => {
+      const result = await citizenCollection.find().toArray();
+      res.send(result);
+
+      // console.log(result);
+    });
+
+    // create citizen
+    app.post("/citizen", async (req, res) => {
+      try {
+        // add createdAt timestamp + role
+        const citizenData = {
+          ...req.body,
+          role: "citizen",
+          createdAt: new Date(),
+        };
+
+        const result = await citizenCollection.insertOne(citizenData);
+        res.send(result);
+      } catch (err) {
+        res.status(500).send({ message: "Failed to insert citizen", err });
+      }
     });
 
     //fixme: Latest Pending Issues (limit 6)
