@@ -234,30 +234,39 @@ async function run() {
     });
     //  ----------------------------citizen---------------------------------
     //*note: edit profile
-    app.patch("/citizen", verifyJWT, async (req, res) => {
+    app.patch("/citizen/:email", verifyJWT, async (req, res) => {
       try {
-        
-        const email = req.tokenEmail;
-        const updateData = req.body;
+        const email = req.params.email; // ✅ use param email
+        const { name, image } = req.body;
 
         const result = await citizenCollection.updateOne(
-          {
-            _id: new ObjectId(id),
-            "reporter.email": email,
-            status: "Pending", // still only editable if Pending
-          },
+          { email }, // ✅ match by email
           {
             $set: {
-              ...updateData,
-              lastUpdated: new Date(), // ✅ add/update timestamp
+              ...(name && { name }),
+              ...(image && { image }),
+              lastUpdated: new Date(),
             },
           }
         );
 
-        // No 403 check, just send result back
         res.send(result);
       } catch (err) {
-        res.status(500).send({ message: "Failed to update issue", err });
+        res
+          .status(500)
+          .send({ message: "Failed to update citizen profile", err });
+      }
+    });
+    app.get("/citizen/:email", async (req, res) => {
+      try {
+        const email = req.params.email;
+        const citizen = await citizenCollection.findOne({ email });
+        if (!citizen) {
+          return res.status(404).send({ message: "Citizen not found" });
+        }
+        res.send(citizen);
+      } catch (err) {
+        res.status(500).send({ message: "Failed to fetch citizen", err });
       }
     });
     //?note: My issues
@@ -357,6 +366,40 @@ async function run() {
     // });
 
     //* ---------Admin----------------
+    // update profile
+    app.patch("/user/:email", verifyJWT, async (req, res) => {
+      try {
+        const email = req.params.email;
+        const { displayName, photoURL } = req.body;
+
+        const result = await citizenCollection.updateOne(
+          { email },
+          {
+            $set: {
+              ...(displayName && { name: displayName }),
+              ...(photoURL && { image: photoURL }),
+              lastUpdated: new Date(),
+            },
+          }
+        );
+
+        res.send(result);
+      } catch (err) {
+        res.status(500).send({ message: "Failed to update user profile", err });
+      }
+    });
+    app.get("/user/:email", async (req, res) => {
+      try {
+        const email = req.params.email;
+        const user = await citizenCollection.findOne({ email });
+        if (!user) {
+          return res.status(404).send({ message: "User not found" });
+        }
+        res.send(user);
+      } catch (err) {
+        res.status(500).send({ message: "Failed to fetch user", err });
+      }
+    });
     // add staff
     app.post("/staff", async (req, res) => {
       try {
@@ -411,6 +454,7 @@ async function run() {
         res.status(500).send({ message: "Failed to delete issue", err });
       }
     });
+
     // block citizen
     app.patch("/citizen/:id", async (req, res) => {
       const id = req.params.id;
@@ -421,6 +465,38 @@ async function run() {
       );
 
       res.send(result);
+    });
+
+    // Admin issues
+    app.put("/reports/:id/assign", async (req, res) => {
+      try {
+        const { id } = req.params;
+        const { staffName } = req.body;
+
+        const result = await reportsCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { assignedStaff: staffName, status: "assigned" } }
+        );
+
+        res.send(result);
+      } catch (err) {
+        res.status(500).send({ message: "Failed to assign staff", err });
+      }
+    });
+
+    app.put("/reports/:id/reject", async (req, res) => {
+      try {
+        const { id } = req.params;
+
+        const result = await reportsCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { status: "rejected" } }
+        );
+
+        res.send(result);
+      } catch (err) {
+        res.status(500).send({ message: "Failed to reject issue", err });
+      }
     });
 
     //* ----------------------------
