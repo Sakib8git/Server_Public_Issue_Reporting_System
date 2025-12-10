@@ -139,6 +139,28 @@ async function run() {
 
       // console.log(result);
     });
+    //! Paginated Issues
+    app.get("/reports-paginated", async (req, res) => {
+      try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
+
+        const issues = await reportsCollection
+          .find()
+          .skip(skip)
+          .limit(limit)
+          .toArray();
+
+        const total = await reportsCollection.countDocuments();
+
+        res.send({ issues, total, page, limit });
+      } catch (err) {
+        res
+          .status(500)
+          .send({ message: "Failed to fetch paginated reports", err });
+      }
+    });
 
     //! All citizen
     app.get("/citizen", async (req, res) => {
@@ -412,11 +434,24 @@ async function run() {
     // });
     // -----------------staff-------------
     // GET /reports/assigned/:staffName
-    app.get("/reports/assigned/:staffName", async (req, res) => {
+    // app.get("/reports/assigned/:staffName", async (req, res) => {
+    //   try {
+    //     const staffName = req.params.staffName;
+    //     const issues = await reportsCollection
+    //       .find({ assignedStaff: staffName })
+    //       .toArray();
+    //     res.send(issues);
+    //   } catch (err) {
+    //     res
+    //       .status(500)
+    //       .send({ message: "Failed to fetch assigned issues", err });
+    //   }
+    // });
+    app.get("/reports/assigned/:staffEmail", async (req, res) => {
       try {
-        const staffName = req.params.staffName;
+        const staffEmail = req.params.staffEmail;
         const issues = await reportsCollection
-          .find({ assignedStaff: staffName })
+          .find({ "assignedStaff.email": staffEmail }) // ✅ match by email
           .toArray();
         res.send(issues);
       } catch (err) {
@@ -425,8 +460,7 @@ async function run() {
           .send({ message: "Failed to fetch assigned issues", err });
       }
     });
-
-    // Staff onw update
+    // Staff onw a
     app.patch("/staff/self/:email", async (req, res) => {
       try {
         const email = req.params.email;
@@ -603,11 +637,20 @@ async function run() {
     app.put("/reports/:id/assign", async (req, res) => {
       try {
         const { id } = req.params;
-        const { staffName } = req.body;
+        const { staffEmail, staffName } = req.body; // ✅ send both
 
         const result = await reportsCollection.updateOne(
           { _id: new ObjectId(id) },
-          { $set: { assignedStaff: staffName, status: "pending" } }
+          {
+            $set: {
+              assignedStaff: {
+                email: staffEmail, // ✅ stable identifier
+                name: staffName, // optional display
+              },
+              status: "pending",
+              assignedAt: new Date(), // ✅ save assign date/time
+            },
+          }
         );
 
         res.send(result);
