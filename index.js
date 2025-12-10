@@ -58,7 +58,27 @@ async function run() {
     const staffCollection = db.collection("staff");
     const commentsCollection = db.collection("comments");
     // const myReportsCollection = db.collection("my-reports");
+    // pagination
+    // GET /reports?page=1&limit=10
+    // app.get("/reports", async (req, res) => {
+    //   try {
+    //     const page = parseInt(req.query.page) || 1;
+    //     const limit = parseInt(req.query.limit) || 10;
+    //     const skip = (page - 1) * limit;
 
+    //     const issues = await reportsCollection
+    //       .find()
+    //       .skip(skip)
+    //       .limit(limit)
+    //       .toArray();
+
+    //     const total = await reportsCollection.countDocuments();
+
+    //     res.send({ issues, total });
+    //   } catch (err) {
+    //     res.status(500).send({ message: "Failed to fetch reports", err });
+    //   }
+    // });
     // comments post
     app.post("/comments", verifyJWT, async (req, res) => {
       try {
@@ -162,14 +182,40 @@ async function run() {
     });
     // --------------------------------------------
     //! issue Detaails
+    // ! issue Details with staff info
     app.get("/reports/:id", async (req, res) => {
-      const id = req.params.id;
-      const cursore = { _id: new ObjectId(id) };
-      const result = await reportsCollection.findOne(cursore);
-      res.send(result);
+      try {
+        const id = req.params.id;
+        const cursor = { _id: new ObjectId(id) };
 
-      // console.log(result);
+        // find issue
+        const issue = await reportsCollection.findOne(cursor);
+
+        if (!issue) {
+          return res.status(404).send({ message: "Issue not found" });
+        }
+
+        // if issue has assignedStaff, fetch staff details
+        if (issue.assignedStaff) {
+          const staffInfo = await staffCollection.findOne({
+            name: issue.assignedStaff,
+          });
+          issue.staffInfo = staffInfo; // attach staff details to issue object
+        }
+
+        res.send(issue);
+      } catch (err) {
+        res.status(500).send({ message: "Failed to fetch issue details", err });
+      }
     });
+    // app.get("/reports/:id", async (req, res) => {
+    //   const id = req.params.id;
+    //   const cursore = { _id: new ObjectId(id) };
+    //   const result = await reportsCollection.findOne(cursore);
+    //   res.send(result);
+
+    //   // console.log(result);
+    // });
     //! reports post---
     // app.post("/reports", async (req, res) => {
     //   const reportData = req.body;
@@ -364,6 +410,76 @@ async function run() {
     //       .send({ message: "Failed to create checkout session", err });
     //   }
     // });
+    // -----------------staff-------------
+    // GET /reports/assigned/:staffName
+    app.get("/reports/assigned/:staffName", async (req, res) => {
+      try {
+        const staffName = req.params.staffName;
+        const issues = await reportsCollection
+          .find({ assignedStaff: staffName })
+          .toArray();
+        res.send(issues);
+      } catch (err) {
+        res
+          .status(500)
+          .send({ message: "Failed to fetch assigned issues", err });
+      }
+    });
+
+    // Staff onw update
+    app.patch("/staff/self/:email", async (req, res) => {
+      try {
+        const email = req.params.email;
+        const { displayName, photoURL } = req.body;
+
+        const result = await staffCollection.updateOne(
+          { email },
+          {
+            $set: {
+              ...(displayName && { name: displayName }),
+              ...(photoURL && { photo: photoURL }), // ✅ use "photo" field from DB
+              lastUpdated: new Date(),
+            },
+          }
+        );
+
+        res.send(result);
+      } catch (err) {
+        res
+          .status(500)
+          .send({ message: "Failed to update staff profile", err });
+      }
+    });
+
+    // get staff by email
+    app.get("/staff/:email", async (req, res) => {
+      try {
+        const email = req.params.email;
+        const staff = await staffCollection.findOne({ email });
+        if (!staff) {
+          return res.status(404).send({ message: "Staff not found" });
+        }
+        res.send(staff);
+      } catch (err) {
+        res.status(500).send({ message: "Failed to fetch staff", err });
+      }
+    });
+    // PATCH /reports/:id/status
+    app.patch("/reports/:id/status", async (req, res) => {
+      try {
+        const { id } = req.params;
+        const { status } = req.body;
+
+        const result = await reportsCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { status, statusUpdatedAt: new Date() } }
+        );
+
+        res.send(result);
+      } catch (err) {
+        res.status(500).send({ message: "Failed to update status", err });
+      }
+    });
 
     //* ---------Admin----------------
     // update profile
@@ -423,14 +539,30 @@ async function run() {
     });
 
     // update staff
+    // app.patch("/staff/:id", async (req, res) => {
+    //   try {
+    //     const id = req.params.id;
+    //     const updateData = req.body; // frontend theke updated staff info asbe
+
+    //     const result = await staffCollection.updateOne(
+    //       { _id: new ObjectId(id) }, // filter
+    //       { $set: updateData } // update operation
+    //     );
+
+    //     res.send(result);
+    //   } catch (err) {
+    //     res.status(500).send({ message: "Failed to update staff", err });
+    //   }
+    // });
+    // update staff
     app.patch("/staff/:id", async (req, res) => {
       try {
         const id = req.params.id;
-        const updateData = req.body; // frontend theke updated staff info asbe
+        const updateData = req.body;
 
         const result = await staffCollection.updateOne(
-          { _id: new ObjectId(id) }, // filter
-          { $set: updateData } // update operation
+          { _id: new ObjectId(id) },
+          { $set: { ...updateData, updatedAt: new Date() } } // ✅ save update time
         );
 
         res.send(result);
@@ -475,7 +607,7 @@ async function run() {
 
         const result = await reportsCollection.updateOne(
           { _id: new ObjectId(id) },
-          { $set: { assignedStaff: staffName, status: "assigned" } }
+          { $set: { assignedStaff: staffName, status: "pending" } }
         );
 
         res.send(result);
