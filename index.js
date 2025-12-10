@@ -58,27 +58,7 @@ async function run() {
     const staffCollection = db.collection("staff");
     const commentsCollection = db.collection("comments");
     // const myReportsCollection = db.collection("my-reports");
-    // pagination
-    // GET /reports?page=1&limit=10
-    // app.get("/reports", async (req, res) => {
-    //   try {
-    //     const page = parseInt(req.query.page) || 1;
-    //     const limit = parseInt(req.query.limit) || 10;
-    //     const skip = (page - 1) * limit;
 
-    //     const issues = await reportsCollection
-    //       .find()
-    //       .skip(skip)
-    //       .limit(limit)
-    //       .toArray();
-
-    //     const total = await reportsCollection.countDocuments();
-
-    //     res.send({ issues, total });
-    //   } catch (err) {
-    //     res.status(500).send({ message: "Failed to fetch reports", err });
-    //   }
-    // });
     // comments post
     app.post("/comments", verifyJWT, async (req, res) => {
       try {
@@ -140,28 +120,76 @@ async function run() {
       // console.log(result);
     });
     //! Paginated Issues
+    // app.get("/reports-paginated", async (req, res) => {
+    //   try {
+    //     const page = parseInt(req.query.page) || 1;
+    //     const limit = parseInt(req.query.limit) || 10;
+    //     const skip = (page - 1) * limit;
+
+    //     const issues = await reportsCollection
+    //       .find()
+    //       .skip(skip)
+    //       .limit(limit)
+    //       .toArray();
+
+    //     const total = await reportsCollection.countDocuments();
+
+    //     res.send({ issues, total, page, limit });
+    //   } catch (err) {
+    //     res
+    //       .status(500)
+    //       .send({ message: "Failed to fetch paginated reports", err });
+    //   }
+    // });
+
     app.get("/reports-paginated", async (req, res) => {
       try {
         const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 10;
+        const limit = parseInt(req.query.limit) || 8;
         const skip = (page - 1) * limit;
 
+        const { search, status, priority, category } = req.query;
+
+        // ✅ Build query object dynamically
+        const query = {};
+
+        // Search by title or location (case-insensitive)
+        if (search) {
+          query.$or = [
+            { title: { $regex: search, $options: "i" } },
+            { location: { $regex: search, $options: "i" } },
+          ];
+        }
+
+        // Filter by status
+        if (status) {
+          query.status = status;
+        }
+
+        // Filter by priority
+        if (priority) {
+          query.priority = priority;
+        }
+
+        // Filter by category
+        if (category) {
+          query.category = category;
+        }
+
+        // ✅ Fetch paginated issues
         const issues = await reportsCollection
-          .find()
+          .find(query)
           .skip(skip)
           .limit(limit)
           .toArray();
 
-        const total = await reportsCollection.countDocuments();
+        const total = await reportsCollection.countDocuments(query);
 
         res.send({ issues, total, page, limit });
       } catch (err) {
-        res
-          .status(500)
-          .send({ message: "Failed to fetch paginated reports", err });
+        res.status(500).send({ message: "Failed to fetch reports", err });
       }
     });
-
     //! All citizen
     app.get("/citizen", async (req, res) => {
       const result = await citizenCollection.find().toArray();
@@ -239,16 +267,28 @@ async function run() {
     //   // console.log(result);
     // });
     //! reports post---
-    // app.post("/reports", async (req, res) => {
-    //   const reportData = req.body;
-    //   const result = await reportsCollection.insertOne(reportData);
-
-    //   // await myReportsCollection.insertOne(reportData);
-
-    //   res.send(result);
-    // });
     app.post("/reports", async (req, res) => {
       try {
+        const { reporter } = req.body;
+
+        // citizen info বের করো
+        const citizen = await citizenCollection.findOne({
+          email: reporter.email,
+        });
+
+        if (citizen?.role === "citizen" && citizen?.status === "normal") {
+          const issueCount = await reportsCollection.countDocuments({
+            "reporter.email": reporter.email,
+          });
+
+          if (issueCount >= 3) {
+            return res.status(403).send({
+              message: "Normal citizens can report a maximum of 3 issues",
+              // message: "Please Buy subscription",
+            });
+          }
+        }
+
         // add createdAt timestamp
         const reportData = { ...req.body, createdAt: new Date() };
 
@@ -258,6 +298,18 @@ async function run() {
         res.status(500).send({ message: "Failed to insert report", err });
       }
     });
+
+    // app.post("/reports", async (req, res) => {
+    //   try {
+    //     // add createdAt timestamp
+    //     const reportData = { ...req.body, createdAt: new Date() };
+
+    //     const result = await reportsCollection.insertOne(reportData);
+    //     res.send(result);
+    //   } catch (err) {
+    //     res.status(500).send({ message: "Failed to insert report", err });
+    //   }
+    // });
     //! upvote count
     app.patch("/reports/:id/upvote", verifyJWT, async (req, res) => {
       try {
