@@ -22,7 +22,8 @@ app.post("/create-checkout-session", async (req, res) => {
           plantId: paymentInfo?.plantId,
           customer: paymentInfo?.customer.email,
         },
-        success_url: `${process.env.CLINT_DOMAIN}/paymentSuccess?session_id={CHECKOUT_SESSION_ID}`,
+        success_url: `${process.env.CLINT_DOMAIN}/boost-pay-success?session_id={CHECKOUT_SESSION_ID}`,
         // success_url: `${process.env.CLINT_DOMAIN}/paymentSuccess?success=true`,
         cancel_url: `${process.env.CLINT_DOMAIN}/plant/${paymentInfo?.plantId}`,
       });
+http://localhost:5173/boost-pay-success

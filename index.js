@@ -2,7 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
-// const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const admin = require("firebase-admin");
 const { default: Stripe } = require("stripe");
 const port = process.env.PORT || 3000;
@@ -18,7 +18,7 @@ const app = express();
 // middleware
 app.use(
   cors({
-    origin: ["http://localhost:5173", "http://localhost:5174"],
+    origin: [process.env.CLIENT_DOMAIN],
     credentials: true,
     optionSuccessStatus: 200,
   })
@@ -216,23 +216,24 @@ async function run() {
     });
 
     //fixme: Latest Pending Issues (limit 6)
-    app.get("/reports/pending", async (req, res) => {
-      try {
-        const result = await reportsCollection
-          .find({ status: { $regex: /^pending$/i } }) // case-insensitive match
-          .sort({ createdAt: -1 }) // latest first
-          .limit(6)
-          .toArray();
-        res.send(result);
-      } catch (err) {
-        res
-          .status(500)
-          .send({ message: "Failed to fetch pending issues", err });
-      }
-    });
+    // app.get("/reports/pending", async (req, res) => {
+    //   try {
+    //     const result = await reportsCollection
+    //       .find({ status: { $regex: /^pending$/i } })
+    //       .sort({ createdAt: -1 })
+    //       .limit(6)
+    //       .toArray();
+    //     res.send(result);
+    //   } catch (err) {
+    //     res
+    //       .status(500)
+    //       .send({ message: "Failed to fetch pending issues", err });
+    //   }
+    // });
     // --------------------------------------------
     //! issue Detaails
     // ! issue Details with staff info
+
     app.get("/reports/:id", async (req, res) => {
       try {
         const id = req.params.id;
@@ -267,6 +268,7 @@ async function run() {
     //   // console.log(result);
     // });
     //! reports post---
+
     app.post("/reports", async (req, res) => {
       try {
         const { reporter } = req.body;
@@ -442,48 +444,68 @@ async function run() {
         res.status(500).send({ message: "Failed to delete issue", err });
       }
     });
-    //Todo: payment-- for boost
-    // app.post("/create-checkout-session", verifyJWT, async (req, res) => {
-    //   try {
-    //     const paymentInfo = req.body;
-    //     const issueId = paymentInfo.issueId;
-    //     const amount = 100 * 100; // 100 Taka → Stripe expects smallest unit (paisa/cents)
+    //note: payment-- for boost
+    app.post("/create-checkout-session", async (req, res) => {
+      const paymentInfo = req.body;
+      // console.log(paymentInfo);
+      // res.send(paymentInfo);
+      // const amount = Math.floor(paymentInfo?.charge * 100);
+      const charge = Number(paymentInfo?.charge) || 0;
+      const amount = charge * 100;
+      if (amount < 50) {
+        return res
+          .status(400)
+          .send({ error: "Amount must be at least 50 cents" });
+      }
 
-    //     // Create Stripe Checkout Session
-    //     const session = await stripe.checkout.sessions.create({
-    //       line_items: [
-    //         {
-    //           price_data: {
-    //             currency: "usd", // Stripe does not support BDT directly, so use USD or test currency
-    //             unit_amount: amount,
-    //             product_data: {
-    //               name: "Boost Issue Priority",
-    //               description: `Boosting issue: ${paymentInfo?.title}`,
-    //               images: [paymentInfo?.image],
-    //             },
-    //           },
-    //           quantity: 1,
-    //         },
-    //       ],
-    //       // ✅ Use reporter email instead of customer
-    //       customer_email: paymentInfo.reporter.email,
-    //       mode: "payment",
-    //       metadata: {
-    //         issueId: issueId,
-    //         reporter: paymentInfo.reporter.email, // ✅ store reporter email in metadata
-    //       },
-    //       success_url: `${process.env.CLIENT_DOMAIN}/paymentSuccess?session_id={CHECKOUT_SESSION_ID}`,
-    //       cancel_url: `${process.env.CLIENT_DOMAIN}/issue-details/${issueId}`,
-    //     });
+      const session = await stripe.checkout.sessions.create({
+        line_items: [
+          {
+            price_data: {
+              currency: "USD",
+              unit_amount: amount,
+              product_data: {
+                name: paymentInfo?.name,
+                // images: [paymentInfo?.image],
+                images: paymentInfo?.image ? [paymentInfo.image] : [],
+              },
+            },
+            quantity: 1,
+          },
+        ],
+        // customer_email: paymentInfo?.email,
+        customer_email: paymentInfo?.email || "default@example.com",
+        mode: "payment",
+        metadata: {
+          citizenId: paymentInfo?.citizenId,
+          email: paymentInfo?.email,
+        },
+        success_url: `${process.env.CLIENT_DOMAIN}/boost-pay-success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${process.env.CLIENT_DOMAIN}/dashboard/cityzen-profile`,
+      });
 
-    //     res.json({ id: session.id });
-    //   } catch (err) {
-    //     console.error("Stripe Checkout Error:", err);
-    //     res
-    //       .status(500)
-    //       .send({ message: "Failed to create checkout session", err });
-    //   }
-    // });
+      res.send({ url: session.url });
+    });
+    // note: make premium
+    // update citizen status (e.g. normal → premium)
+    app.patch("/citizen/status/:id", async (req, res) => {
+      const id = req.params.id;
+      const { status } = req.body;
+
+      try {
+        const result = await citizenCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { status } }
+        );
+
+        res.send({ success: true, result });
+      } catch (err) {
+        console.error(err);
+        res
+          .status(500)
+          .send({ success: false, error: "Failed to update status" });
+      }
+    });
     // -----------------staff-------------
     // GET /reports/assigned/:staffName
     // app.get("/reports/assigned/:staffName", async (req, res) => {
