@@ -59,8 +59,66 @@ async function run() {
     const commentsCollection = db.collection("comments");
     const paymentCollection = db.collection("payments");
 
-    // const myReportsCollection = db.collection("my-reports");
+    // middle ware amin
+    //! Admin
+    const verifyAdmin = async (req, res, next) => {
+      try {
+        const email = req.tokenEmail;
+        const citizen = await citizenCollection.findOne({ email });
 
+        if (!citizen || citizen.role !== "admin") {
+          return res
+            .status(403)
+            .send({ message: "Admin only", role: citizen?.role || "none" });
+        }
+
+        next();
+      } catch (err) {
+        console.error("verifyAdmin error:", err);
+        res.status(500).send({ message: "Server error in verifyAdmin" });
+      }
+    };
+
+    //! citizen
+    const verifyCitizen = async (req, res, next) => {
+      try {
+        const email = req.tokenEmail; // ✅ token থেকে আসা email
+
+        // ✅ citizenCollection এ email দিয়ে খুঁজবো
+        const citizen = await citizenCollection.findOne({ email });
+
+        if (!citizen || citizen.role !== "citizen") {
+          return res
+            .status(403)
+            .send({ message: "Citizen only", role: citizen?.role || "none" });
+        }
+
+        next();
+      } catch (err) {
+        console.error("verifyCitizen error:", err);
+        res.status(500).send({ message: "Server error in verifyCitizen" });
+      }
+    };
+    // !staff
+    const verifyStaff = async (req, res, next) => {
+      try {
+        const email = req.tokenEmail;
+
+        const staff = await staffCollection.findOne({ email });
+
+        if (!staff || staff.role !== "staff") {
+          return res
+            .status(403)
+            .send({ message: "Staff only", role: staff?.role || "none" });
+        }
+
+        next();
+      } catch (err) {
+        console.error("verifyStaff error:", err);
+        res.status(500).send({ message: "Server error in verifyStaff" });
+      }
+    };
+    // ----------------
     // comments post
     app.post("/comments", verifyJWT, async (req, res) => {
       try {
@@ -349,11 +407,10 @@ async function run() {
     // });
     //! reports post---
 
-    app.post("/reports", async (req, res) => {
+    app.post("/reports", verifyJWT, verifyCitizen, async (req, res) => {
       try {
         const { reporter } = req.body;
 
-        // citizen info বের করো
         const citizen = await citizenCollection.findOne({
           email: reporter.email,
         });
@@ -393,50 +450,55 @@ async function run() {
     //   }
     // });
     //! upvote count
-    app.patch("/reports/:id/upvote", verifyJWT, async (req, res) => {
-      try {
-        const id = req.params.id;
-        const email = req.tokenEmail;
+    app.patch(
+      "/reports/:id/upvote",
+      verifyJWT,
+      verifyCitizen,
+      async (req, res) => {
+        try {
+          const id = req.params.id;
+          const email = req.tokenEmail;
 
-        // Find issue
-        const issue = await reportsCollection.findOne({
-          _id: new ObjectId(id),
-        });
-        if (!issue) {
-          return res.status(404).send({ message: "Issue not found" });
-        }
-
-        // ❌ Prevent self-upvote
-        if (issue.reporter?.email === email) {
-          return res
-            .status(403)
-            .send({ message: "You cannot upvote your own issue" });
-        }
-
-        // ❌ Prevent duplicate upvote
-        if (issue.upvoters && issue.upvoters.includes(email)) {
-          return res
-            .status(400)
-            .send({ message: "You have already upvoted this issue" });
-        }
-
-        // ✅ Update: increment upvote + add user email
-        const result = await reportsCollection.updateOne(
-          { _id: new ObjectId(id) },
-          {
-            $inc: { upvote: 1 },
-            $push: { upvoters: email },
+          // Find issue
+          const issue = await reportsCollection.findOne({
+            _id: new ObjectId(id),
+          });
+          if (!issue) {
+            return res.status(404).send({ message: "Issue not found" });
           }
-        );
 
-        res.send({ message: "Upvote successful", result });
-      } catch (err) {
-        res.status(500).send({ message: "Failed to upvote issue", err });
+          // ❌ Prevent self-upvote
+          if (issue.reporter?.email === email) {
+            return res
+              .status(403)
+              .send({ message: "You cannot upvote your own issue" });
+          }
+
+          // ❌ Prevent duplicate upvote
+          if (issue.upvoters && issue.upvoters.includes(email)) {
+            return res
+              .status(400)
+              .send({ message: "You have already upvoted this issue" });
+          }
+
+          // ✅ Update: increment upvote + add user email
+          const result = await reportsCollection.updateOne(
+            { _id: new ObjectId(id) },
+            {
+              $inc: { upvote: 1 },
+              $push: { upvoters: email },
+            }
+          );
+
+          res.send({ message: "Upvote successful", result });
+        } catch (err) {
+          res.status(500).send({ message: "Failed to upvote issue", err });
+        }
       }
-    });
-    //  ----------------------------citizen---------------------------------
+    );
+    //!  ----------------------------citizen---------------------------------
     //*note: edit profile
-    app.patch("/citizen/:email", verifyJWT, async (req, res) => {
+    app.patch("/citizen/:email", verifyJWT, verifyCitizen, async (req, res) => {
       try {
         const email = req.params.email; // ✅ use param email
         const { name, image } = req.body;
@@ -472,17 +534,22 @@ async function run() {
       }
     });
     //?note: My issues
-    app.get("/dashboard/my-issues", verifyJWT, async (req, res) => {
-      const email = req.tokenEmail;
-      const result = await reportsCollection
-        .find({ "reporter.email": email })
-        .toArray();
-      res.send(result);
+    app.get(
+      "/dashboard/my-issues",
+      verifyJWT,
+      verifyCitizen,
+      async (req, res) => {
+        const email = req.tokenEmail;
+        const result = await reportsCollection
+          .find({ "reporter.email": email })
+          .toArray();
+        res.send(result);
 
-      // console.log(result);
-    });
+        // console.log(result);
+      }
+    );
     //*note: edit issue
-    app.patch("/reports/:id", verifyJWT, async (req, res) => {
+    app.patch("/reports/:id", verifyJWT, verifyCitizen, async (req, res) => {
       try {
         const id = req.params.id;
         const email = req.tokenEmail;
@@ -509,33 +576,38 @@ async function run() {
       }
     });
     // boost priority high
-    app.patch("/reports/priority/:id", verifyJWT, async (req, res) => {
-      try {
-        const id = req.params.id;
-        const email = req.tokenEmail;
+    app.patch(
+      "/reports/priority/:id",
+      verifyJWT,
+      verifyCitizen,
+      async (req, res) => {
+        try {
+          const id = req.params.id;
+          const email = req.tokenEmail;
 
-        const result = await reportsCollection.updateOne(
-          {
-            _id: new ObjectId(id),
-            "reporter.email": email,
-            status: "Pending", // ✅ শুধু Pending হলে boost করা যাবে
-          },
-          {
-            $set: {
-              priority: "High",
-              boosted: true,
-              lastUpdated: new Date(),
+          const result = await reportsCollection.updateOne(
+            {
+              _id: new ObjectId(id),
+              "reporter.email": email,
+              status: "Pending", // ✅ শুধু Pending হলে boost করা যাবে
             },
-          }
-        );
+            {
+              $set: {
+                priority: "High",
+                boosted: true,
+                lastUpdated: new Date(),
+              },
+            }
+          );
 
-        res.send(result);
-      } catch (err) {
-        res.status(500).send({ message: "Failed to boost priority", err });
+          res.send(result);
+        } catch (err) {
+          res.status(500).send({ message: "Failed to boost priority", err });
+        }
       }
-    });
+    );
     //!note: Delete issue
-    app.delete("/reports/:id", verifyJWT, async (req, res) => {
+    app.delete("/reports/:id", verifyJWT, verifyCitizen, async (req, res) => {
       try {
         const id = req.params.id;
         const email = req.tokenEmail;
@@ -550,57 +622,19 @@ async function run() {
         res.status(500).send({ message: "Failed to delete issue", err });
       }
     });
-    //!--------------------------- payments
-    //note: payment-- for boost
-    app.post("/create-checkout-session", async (req, res) => {
-      const paymentInfo = req.body;
-      // console.log(paymentInfo);
-      // res.send(paymentInfo);
-      // const amount = Math.floor(paymentInfo?.charge * 100);
-      const charge = Number(paymentInfo?.charge) || 0;
-      const amount = charge * 100;
-      if (amount < 50) {
-        return res
-          .status(400)
-          .send({ error: "Amount must be at least 50 cents" });
-      }
-
-      const session = await stripe.checkout.sessions.create({
-        line_items: [
-          {
-            price_data: {
-              currency: "USD",
-              unit_amount: amount,
-              product_data: {
-                name: paymentInfo?.name,
-                // images: [paymentInfo?.image],
-                images: paymentInfo?.image ? [paymentInfo.image] : [],
-              },
-            },
-            quantity: 1,
-          },
-        ],
-        // customer_email: paymentInfo?.email,
-        customer_email: paymentInfo?.email || "default@example.com",
-        mode: "payment",
-        metadata: {
-          citizenId: paymentInfo?.citizenId,
-          email: paymentInfo?.email,
-        },
-        success_url: `${process.env.CLIENT_DOMAIN}/boost-pay-success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${process.env.CLIENT_DOMAIN}/dashboard/cityzen-profile`,
-      });
-
-      res.send({ url: session.url });
-    });
-    // !note: --------boost
-    app.post("/create-boost-session", async (req, res) => {
-      try {
+    //!------------------ payments
+    //note: payment-- for premium user
+    app.post(
+      "/create-checkout-session",
+      verifyJWT,
+      verifyCitizen,
+      async (req, res) => {
         const paymentInfo = req.body;
-        const { issueId, email, charge, title, image } = paymentInfo;
-
-        const boost = Number(paymentInfo?.charge) || 0;
-        const amount = boost * 100;
+        // console.log(paymentInfo);
+        // res.send(paymentInfo);
+        // const amount = Math.floor(paymentInfo?.charge * 100);
+        const charge = Number(paymentInfo?.charge) || 0;
+        const amount = charge * 100;
         if (amount < 50) {
           return res
             .status(400)
@@ -614,35 +648,83 @@ async function run() {
                 currency: "USD",
                 unit_amount: amount,
                 product_data: {
-                  name: title || "Issue Boost Priority",
-                  images: image ? [image] : [],
+                  name: paymentInfo?.name,
+                  // images: [paymentInfo?.image],
+                  images: paymentInfo?.image ? [paymentInfo.image] : [],
                 },
               },
               quantity: 1,
             },
           ],
-          customer_email: email || "default@example.com",
+          // customer_email: paymentInfo?.email,
+          customer_email: paymentInfo?.email || "default@example.com",
           mode: "payment",
           metadata: {
-            issueId, // ✅ store issueId in metadata
-            email,
-            action: "boost", 
-            date: new Date().toISOString(),
+            citizenId: paymentInfo?.citizenId,
+            email: paymentInfo?.email,
           },
-          // success_url: `${process.env.CLIENT_DOMAIN}/high-pay-success?session_id={CHECKOUT_SESSION_ID}`,
-          success_url: `${process.env.CLIENT_DOMAIN}/high-pay-success/${issueId}?session_id={CHECKOUT_SESSION_ID}`,
-          cancel_url: `${process.env.CLIENT_DOMAIN}/issue-details/${issueId}`,
+          success_url: `${process.env.CLIENT_DOMAIN}/boost-pay-success?session_id={CHECKOUT_SESSION_ID}`,
+          cancel_url: `${process.env.CLIENT_DOMAIN}/dashboard/cityzen-profile`,
         });
 
         res.send({ url: session.url });
-      } catch (err) {
-        console.error("Boost session error:", err);
-        res
-          .status(500)
-          .send({ message: "Failed to create boost session", err });
       }
-    });
-    //!--------------------------- payments
+    );
+    // !note: --------boost
+    app.post(
+      "/create-boost-session",
+      verifyJWT,
+      verifyCitizen,
+      async (req, res) => {
+        try {
+          const paymentInfo = req.body;
+          const { issueId, email, charge, title, image } = paymentInfo;
+
+          const boost = Number(paymentInfo?.charge) || 0;
+          const amount = boost * 100;
+          if (amount < 50) {
+            return res
+              .status(400)
+              .send({ error: "Amount must be at least 50 cents" });
+          }
+
+          const session = await stripe.checkout.sessions.create({
+            line_items: [
+              {
+                price_data: {
+                  currency: "USD",
+                  unit_amount: amount,
+                  product_data: {
+                    name: title || "Issue Boost Priority",
+                    images: image ? [image] : [],
+                  },
+                },
+                quantity: 1,
+              },
+            ],
+            customer_email: email || "default@example.com",
+            mode: "payment",
+            metadata: {
+              issueId, // ✅ store issueId in metadata
+              email,
+              action: "boost",
+              date: new Date().toISOString(),
+            },
+            // success_url: `${process.env.CLIENT_DOMAIN}/high-pay-success?session_id={CHECKOUT_SESSION_ID}`,
+            success_url: `${process.env.CLIENT_DOMAIN}/high-pay-success/${issueId}?session_id={CHECKOUT_SESSION_ID}`,
+            cancel_url: `${process.env.CLIENT_DOMAIN}/issue-details/${issueId}`,
+          });
+
+          res.send({ url: session.url });
+        } catch (err) {
+          console.error("Boost session error:", err);
+          res
+            .status(500)
+            .send({ message: "Failed to create boost session", err });
+        }
+      }
+    );
+    //!----------------- payments
     // note: make premium
     // update citizen status
     app.patch("/citizen/status/:id", async (req, res) => {
@@ -669,7 +751,7 @@ async function run() {
           .send({ success: false, error: "Failed to update status" });
       }
     });
-    // -----------------staff-------------
+    //! -----------------staff----------------------------------------------
     // GET /reports/assigned/:staffName
     // app.get("/reports/assigned/:staffName", async (req, res) => {
     //   try {
@@ -698,29 +780,34 @@ async function run() {
       }
     });
     // Staff onw a
-    app.patch("/staff/self/:email", async (req, res) => {
-      try {
-        const email = req.params.email;
-        const { displayName, photoURL } = req.body;
+    app.patch(
+      "/staff/self/:email",
+      verifyJWT,
+      verifyStaff,
+      async (req, res) => {
+        try {
+          const email = req.params.email;
+          const { displayName, photoURL } = req.body;
 
-        const result = await staffCollection.updateOne(
-          { email },
-          {
-            $set: {
-              ...(displayName && { name: displayName }),
-              ...(photoURL && { photo: photoURL }), // ✅ use "photo" field from DB
-              lastUpdated: new Date(),
-            },
-          }
-        );
+          const result = await staffCollection.updateOne(
+            { email },
+            {
+              $set: {
+                ...(displayName && { name: displayName }),
+                ...(photoURL && { photo: photoURL }), // ✅ use "photo" field from DB
+                lastUpdated: new Date(),
+              },
+            }
+          );
 
-        res.send(result);
-      } catch (err) {
-        res
-          .status(500)
-          .send({ message: "Failed to update staff profile", err });
+          res.send(result);
+        } catch (err) {
+          res
+            .status(500)
+            .send({ message: "Failed to update staff profile", err });
+        }
       }
-    });
+    );
 
     // get staff by email
     app.get("/staff/:email", async (req, res) => {
@@ -736,25 +823,30 @@ async function run() {
       }
     });
     // PATCH /reports/:id/status
-    app.patch("/reports/:id/status", async (req, res) => {
-      try {
-        const { id } = req.params;
-        const { status } = req.body;
+    app.patch(
+      "/reports/:id/status",
+      verifyJWT,
+      verifyStaff,
+      async (req, res) => {
+        try {
+          const { id } = req.params;
+          const { status } = req.body;
 
-        const result = await reportsCollection.updateOne(
-          { _id: new ObjectId(id) },
-          { $set: { status, statusUpdatedAt: new Date() } }
-        );
+          const result = await reportsCollection.updateOne(
+            { _id: new ObjectId(id) },
+            { $set: { status, statusUpdatedAt: new Date() } }
+          );
 
-        res.send(result);
-      } catch (err) {
-        res.status(500).send({ message: "Failed to update status", err });
+          res.send(result);
+        } catch (err) {
+          res.status(500).send({ message: "Failed to update status", err });
+        }
       }
-    });
+    );
 
-    //* ---------Admin----------------
+    //! ---------Admin----------------
     // update profile
-    app.patch("/user/:email", verifyJWT, async (req, res) => {
+    app.patch("/user/:email", verifyJWT, verifyAdmin, async (req, res) => {
       try {
         const email = req.params.email;
         const { displayName, photoURL } = req.body;
@@ -775,7 +867,7 @@ async function run() {
         res.status(500).send({ message: "Failed to update user profile", err });
       }
     });
-    app.get("/user/:email", async (req, res) => {
+    app.get("/user/:email", verifyJWT, verifyAdmin, async (req, res) => {
       try {
         const email = req.params.email;
         const user = await citizenCollection.findOne({ email });
@@ -788,19 +880,29 @@ async function run() {
       }
     });
     // add staff
-    app.post("/staff", async (req, res) => {
+    // app.post("/staff", async (req, res) => {
+    //   try {
+    //     const staffData = { ...req.body, createdAt: new Date() };
+
+    //     const result = await staffCollection.insertOne(staffData);
+    //     res.send(result);
+    //   } catch (err) {
+    //     res.status(500).send({ message: "Failed to insert report", err });
+    //   }
+    // });
+    app.post("/staff", verifyJWT, verifyAdmin, async (req, res) => {
       try {
-        // add createdAt timestamp
         const staffData = { ...req.body, createdAt: new Date() };
 
         const result = await staffCollection.insertOne(staffData);
         res.send(result);
       } catch (err) {
-        res.status(500).send({ message: "Failed to insert report", err });
+        res.status(500).send({ message: "Failed to insert staff", err });
       }
     });
+
     // get all staff
-    app.get("/staff", async (req, res) => {
+    app.get("/staff", verifyJWT, verifyAdmin, async (req, res) => {
       try {
         const staff = await staffCollection.find().toArray();
         res.send(staff);
@@ -826,7 +928,7 @@ async function run() {
     //   }
     // });
     // update staff
-    app.patch("/staff/:id", async (req, res) => {
+    app.patch("/staff/:id", verifyJWT, verifyAdmin, async (req, res) => {
       try {
         const id = req.params.id;
         const updateData = req.body;
@@ -842,7 +944,7 @@ async function run() {
       }
     });
     // delete
-    app.delete("/staff/:id", verifyJWT, async (req, res) => {
+    app.delete("/staff/:id", verifyJWT, verifyAdmin, async (req, res) => {
       try {
         const id = req.params.id;
         // const email = req.tokenEmail;
@@ -859,7 +961,7 @@ async function run() {
     });
 
     // block citizen
-    app.patch("/citizen/:id", async (req, res) => {
+    app.patch("/citizen/:id", verifyJWT, verifyAdmin, async (req, res) => {
       const id = req.params.id;
       const { action } = req.body;
       const result = await citizenCollection.updateOne(
@@ -871,7 +973,7 @@ async function run() {
     });
 
     // Admin issues
-    app.put("/reports/:id/assign", async (req, res) => {
+    app.put("/reports/:id/assign", verifyJWT, verifyAdmin, async (req, res) => {
       try {
         const { id } = req.params;
         const { staffEmail, staffName } = req.body; // ✅ send both
@@ -896,7 +998,7 @@ async function run() {
       }
     });
 
-    app.put("/reports/:id/reject", async (req, res) => {
+    app.put("/reports/:id/reject", verifyJWT, verifyAdmin, async (req, res) => {
       try {
         const { id } = req.params;
 
