@@ -57,6 +57,8 @@ async function run() {
     const reportsCollection = db.collection("reports");
     const staffCollection = db.collection("staff");
     const commentsCollection = db.collection("comments");
+    const paymentCollection = db.collection("payments");
+
     // const myReportsCollection = db.collection("my-reports");
 
     // comments post
@@ -487,15 +489,21 @@ async function run() {
       res.send({ url: session.url });
     });
     // note: make premium
-    // update citizen status (e.g. normal → premium)
+    // update citizen status
     app.patch("/citizen/status/:id", async (req, res) => {
       const id = req.params.id;
+      // const { status } = req.body;
       const { status } = req.body;
 
       try {
         const result = await citizenCollection.updateOne(
           { _id: new ObjectId(id) },
-          { $set: { status } }
+          {
+            $set: {
+              status,
+              paymentDate: new Date(),
+            },
+          }
         );
 
         res.send({ success: true, result });
