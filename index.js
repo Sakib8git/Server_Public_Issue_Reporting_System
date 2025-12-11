@@ -144,54 +144,132 @@ async function run() {
     //   }
     // });
 
+    // app.get("/reports-paginated", async (req, res) => {
+    //   try {
+    //     const page = parseInt(req.query.page) || 1;
+    //     const limit = parseInt(req.query.limit) || 8;
+    //     const skip = (page - 1) * limit;
+
+    //     const { search, status, priority, category } = req.query;
+
+    //     // ✅ Build query object dynamically
+    //     const query = {};
+
+    //     // Search by title or location (case-insensitive)
+    //     if (search) {
+    //       query.$or = [
+    //         { title: { $regex: search, $options: "i" } },
+    //         { location: { $regex: search, $options: "i" } },
+    //       ];
+    //     }
+
+    //     // Filter by status
+    //     if (status) {
+    //       query.status = status;
+    //     }
+
+    //     // Filter by priority
+    //     if (priority) {
+    //       query.priority = priority;
+    //     }
+
+    //     // Filter by category
+    //     if (category) {
+    //       query.category = category;
+    //     }
+
+    //     // ✅ Fetch paginated issues
+    //     const issues = await reportsCollection
+    //       .find(query)
+    //       .skip(skip)
+    //       .limit(limit)
+    //       .toArray();
+
+    //     const total = await reportsCollection.countDocuments(query);
+
+    //     res.send({ issues, total, page, limit });
+    //   } catch (err) {
+    //     res.status(500).send({ message: "Failed to fetch reports", err });
+    //   }
+    // });
+
+    // app.get("/reports-paginated", async (req, res) => {
+    //   try {
+    //     const page = parseInt(req.query.page) || 1;
+    //     const limit = parseInt(req.query.limit) || 8;
+    //     const skip = (page - 1) * limit;
+
+    //     const { search, status, priority, category } = req.query;
+
+    //     // ✅ Build query object dynamically
+    //     const query = {};
+
+    //     // Search by title or location (case-insensitive)
+    //     if (search && search.trim() !== "") {
+    //       query.$or = [
+    //         { title: { $regex: search.trim(), $options: "i" } },
+    //         { location: { $regex: search.trim(), $options: "i" } },
+    //       ];
+    //     }
+
+    //     if (status && status.trim() !== "") {
+    //       query.status = status.trim();
+    //     }
+
+    //     if (priority && priority.trim() !== "") {
+    //       query.priority = priority.trim();
+    //     }
+
+    //     if (category && category.trim() !== "") {
+    //       query.category = category.trim();
+    //     }
+
+    //     // ✅ Debug log
+    //     console.log("Query:", query);
+    //     console.log("Page:", page, "Skip:", skip, "Limit:", limit);
+
+    //     // ✅ Fetch paginated issues
+    //     const issues = await reportsCollection
+    //       .find(query)
+    //       .skip(skip)
+    //       .limit(limit)
+    //       .toArray();
+
+    //     const total = await reportsCollection.countDocuments(query);
+
+    //     res.send({ issues, total, page, limit });
+    //   } catch (err) {
+    //     console.error("Pagination error:", err);
+    //     res.status(500).send({ message: "Failed to fetch reports", err });
+    //   }
+    // });
+    // todo: fixed pagination
     app.get("/reports-paginated", async (req, res) => {
       try {
-        const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 8;
-        const skip = (page - 1) * limit;
-
         const { search, status, priority, category } = req.query;
-
-        // ✅ Build query object dynamically
         const query = {};
 
-        // Search by title or location (case-insensitive)
-        if (search) {
+        if (search && search.trim() !== "") {
           query.$or = [
-            { title: { $regex: search, $options: "i" } },
-            { location: { $regex: search, $options: "i" } },
+            { title: { $regex: search.trim(), $options: "i" } },
+            { location: { $regex: search.trim(), $options: "i" } },
           ];
         }
+        if (status && status.trim() !== "") query.status = status.trim();
+        if (priority && priority.trim() !== "")
+          query.priority = priority.trim();
+        if (category && category.trim() !== "")
+          query.category = category.trim();
 
-        // Filter by status
-        if (status) {
-          query.status = status;
-        }
+        console.log("Query:", query); // ✅ Debug log
 
-        // Filter by priority
-        if (priority) {
-          query.priority = priority;
-        }
-
-        // Filter by category
-        if (category) {
-          query.category = category;
-        }
-
-        // ✅ Fetch paginated issues
-        const issues = await reportsCollection
-          .find(query)
-          .skip(skip)
-          .limit(limit)
-          .toArray();
-
-        const total = await reportsCollection.countDocuments(query);
-
-        res.send({ issues, total, page, limit });
+        const issues = await reportsCollection.find(query).toArray();
+        res.send({ issues });
       } catch (err) {
         res.status(500).send({ message: "Failed to fetch reports", err });
       }
     });
+
     //! All citizen
     app.get("/citizen", async (req, res) => {
       const result = await citizenCollection.find().toArray();
@@ -430,6 +508,32 @@ async function run() {
         res.status(500).send({ message: "Failed to update issue", err });
       }
     });
+    // boost priority high
+    app.patch("/reports/priority/:id", verifyJWT, async (req, res) => {
+      try {
+        const id = req.params.id;
+        const email = req.tokenEmail;
+
+        const result = await reportsCollection.updateOne(
+          {
+            _id: new ObjectId(id),
+            "reporter.email": email,
+            status: "Pending", // ✅ শুধু Pending হলে boost করা যাবে
+          },
+          {
+            $set: {
+              priority: "High",
+              boosted: true,
+              lastUpdated: new Date(),
+            },
+          }
+        );
+
+        res.send(result);
+      } catch (err) {
+        res.status(500).send({ message: "Failed to boost priority", err });
+      }
+    });
     //!note: Delete issue
     app.delete("/reports/:id", verifyJWT, async (req, res) => {
       try {
@@ -446,6 +550,7 @@ async function run() {
         res.status(500).send({ message: "Failed to delete issue", err });
       }
     });
+    //!--------------------------- payments
     //note: payment-- for boost
     app.post("/create-checkout-session", async (req, res) => {
       const paymentInfo = req.body;
@@ -488,6 +593,56 @@ async function run() {
 
       res.send({ url: session.url });
     });
+    // !note: --------boost
+    app.post("/create-boost-session", async (req, res) => {
+      try {
+        const paymentInfo = req.body;
+        const { issueId, email, charge, title, image } = paymentInfo;
+
+        const boost = Number(paymentInfo?.charge) || 0;
+        const amount = boost * 100;
+        if (amount < 50) {
+          return res
+            .status(400)
+            .send({ error: "Amount must be at least 50 cents" });
+        }
+
+        const session = await stripe.checkout.sessions.create({
+          line_items: [
+            {
+              price_data: {
+                currency: "USD",
+                unit_amount: amount,
+                product_data: {
+                  name: title || "Issue Boost Priority",
+                  images: image ? [image] : [],
+                },
+              },
+              quantity: 1,
+            },
+          ],
+          customer_email: email || "default@example.com",
+          mode: "payment",
+          metadata: {
+            issueId, // ✅ store issueId in metadata
+            email,
+            action: "boost", // ✅ mark this as boost payment
+            date: new Date().toISOString(), // ✅ add current date/time
+          },
+          // success_url: `${process.env.CLIENT_DOMAIN}/high-pay-success?session_id={CHECKOUT_SESSION_ID}`,
+          success_url: `${process.env.CLIENT_DOMAIN}/high-pay-success/${issueId}?session_id={CHECKOUT_SESSION_ID}`,
+          cancel_url: `${process.env.CLIENT_DOMAIN}/issue-details/${issueId}`,
+        });
+
+        res.send({ url: session.url });
+      } catch (err) {
+        console.error("Boost session error:", err);
+        res
+          .status(500)
+          .send({ message: "Failed to create boost session", err });
+      }
+    });
+    //!--------------------------- payments
     // note: make premium
     // update citizen status
     app.patch("/citizen/status/:id", async (req, res) => {
