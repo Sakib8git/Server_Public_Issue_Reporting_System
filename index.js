@@ -1005,17 +1005,32 @@ async function run() {
     });
 
     // block citizen
-    app.patch("/citizen/:id", verifyJWT, verifyAdmin, async (req, res) => {
-      const id = req.params.id;
-      const { action } = req.body;
-      const result = await citizenCollection.updateOne(
-        { _id: new ObjectId(id) },
-        { $set: { action } }
-      );
+    // app.patch("/citizen/:id", async (req, res) => {
+    //   const id = req.params.id;
+    //   const { action } = req.body;
+    //   const result = await citizenCollection.updateOne(
+    //     { _id: new ObjectId(id) },
+    //     { $set: { action } }
+    //   );
 
-      res.send(result);
-    });
+    //   res.send(result);
+    // });
+    app.patch(
+      "/citizen/action/:id",
+      verifyJWT,
+      verifyAdmin,
+      async (req, res) => {
+        const id = req.params.id;
+        const { action } = req.body;
 
+        const result = await citizenCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { action } }
+        );
+
+        res.send(result);
+      }
+    );
     // Admin issues
     app.put("/reports/:id/assign", verifyJWT, verifyAdmin, async (req, res) => {
       try {
