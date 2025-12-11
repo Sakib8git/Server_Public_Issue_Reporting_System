@@ -14,7 +14,7 @@ const decoded = Buffer.from(process.env.FB_SERVICE_KEY, "base64").toString(
 //   credential: admin.credential.cert(serviceAccount),
 // });
 
-const serviceAccount = require("./serviceAccountKey.json");
+const serviceAccount = require(process.env.FIREBASE_ADMIN_KEY_PATH);
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
