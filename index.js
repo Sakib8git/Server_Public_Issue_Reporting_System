@@ -186,155 +186,58 @@ async function run() {
       // console.log(result);
     });
     //! Paginated Issues
-    // app.get("/reports-paginated", async (req, res) => {
-    //   try {
-    //     const page = parseInt(req.query.page) || 1;
-    //     const limit = parseInt(req.query.limit) || 10;
-    //     const skip = (page - 1) * limit;
-
-    //     const issues = await reportsCollection
-    //       .find()
-    //       .skip(skip)
-    //       .limit(limit)
-    //       .toArray();
-
-    //     const total = await reportsCollection.countDocuments();
-
-    //     res.send({ issues, total, page, limit });
-    //   } catch (err) {
-    //     res
-    //       .status(500)
-    //       .send({ message: "Failed to fetch paginated reports", err });
-    //   }
-    // });
-
-    // app.get("/reports-paginated", async (req, res) => {
-    //   try {
-    //     const page = parseInt(req.query.page) || 1;
-    //     const limit = parseInt(req.query.limit) || 8;
-    //     const skip = (page - 1) * limit;
-
-    //     const { search, status, priority, category } = req.query;
-
-    //     // ✅ Build query object dynamically
-    //     const query = {};
-
-    //     // Search by title or location (case-insensitive)
-    //     if (search) {
-    //       query.$or = [
-    //         { title: { $regex: search, $options: "i" } },
-    //         { location: { $regex: search, $options: "i" } },
-    //       ];
-    //     }
-
-    //     // Filter by status
-    //     if (status) {
-    //       query.status = status;
-    //     }
-
-    //     // Filter by priority
-    //     if (priority) {
-    //       query.priority = priority;
-    //     }
-
-    //     // Filter by category
-    //     if (category) {
-    //       query.category = category;
-    //     }
-
-    //     // ✅ Fetch paginated issues
-    //     const issues = await reportsCollection
-    //       .find(query)
-    //       .skip(skip)
-    //       .limit(limit)
-    //       .toArray();
-
-    //     const total = await reportsCollection.countDocuments(query);
-
-    //     res.send({ issues, total, page, limit });
-    //   } catch (err) {
-    //     res.status(500).send({ message: "Failed to fetch reports", err });
-    //   }
-    // });
-
-    // app.get("/reports-paginated", async (req, res) => {
-    //   try {
-    //     const page = parseInt(req.query.page) || 1;
-    //     const limit = parseInt(req.query.limit) || 8;
-    //     const skip = (page - 1) * limit;
-
-    //     const { search, status, priority, category } = req.query;
-
-    //     // ✅ Build query object dynamically
-    //     const query = {};
-
-    //     // Search by title or location (case-insensitive)
-    //     if (search && search.trim() !== "") {
-    //       query.$or = [
-    //         { title: { $regex: search.trim(), $options: "i" } },
-    //         { location: { $regex: search.trim(), $options: "i" } },
-    //       ];
-    //     }
-
-    //     if (status && status.trim() !== "") {
-    //       query.status = status.trim();
-    //     }
-
-    //     if (priority && priority.trim() !== "") {
-    //       query.priority = priority.trim();
-    //     }
-
-    //     if (category && category.trim() !== "") {
-    //       query.category = category.trim();
-    //     }
-
-    //     // ✅ Debug log
-    //     console.log("Query:", query);
-    //     console.log("Page:", page, "Skip:", skip, "Limit:", limit);
-
-    //     // ✅ Fetch paginated issues
-    //     const issues = await reportsCollection
-    //       .find(query)
-    //       .skip(skip)
-    //       .limit(limit)
-    //       .toArray();
-
-    //     const total = await reportsCollection.countDocuments(query);
-
-    //     res.send({ issues, total, page, limit });
-    //   } catch (err) {
-    //     console.error("Pagination error:", err);
-    //     res.status(500).send({ message: "Failed to fetch reports", err });
-    //   }
-    // });
-    // todo: fixed pagination
     app.get("/reports-paginated", async (req, res) => {
       try {
-        const { search, status, priority, category } = req.query;
-        const query = {};
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 8;
+        const skip = (page - 1) * limit;
 
-        if (search && search.trim() !== "") {
-          query.$or = [
-            { title: { $regex: search.trim(), $options: "i" } },
-            { location: { $regex: search.trim(), $options: "i" } },
+        // ✅ Query params for search & filter
+        const search = req.query.search || "";
+        const status = req.query.status || "";
+        const priority = req.query.priority || "";
+        const category = req.query.category || "";
+        const location = req.query.location || "";
+
+        const filter = {};
+
+        if (search) {
+          filter.$or = [
+            { title: { $regex: search, $options: "i" } },
+            { location: { $regex: search, $options: "i" } },
           ];
         }
-        if (status && status.trim() !== "") query.status = status.trim();
-        if (priority && priority.trim() !== "")
-          query.priority = priority.trim();
-        if (category && category.trim() !== "")
-          query.category = category.trim();
+        if (status) filter.status = status;
+        if (priority) filter.priority = priority;
+        if (category) filter.category = category;
+        if (location) filter.location = location;
 
-        console.log("Query:", query); // ✅ Debug log
+        const totalCount = await reportsCollection.countDocuments(filter);
+        const totalPages = Math.ceil(totalCount / limit);
 
-        const issues = await reportsCollection.find(query).toArray();
-        res.send({ issues });
+        const issues = await reportsCollection
+          .find(filter)
+          .skip(skip)
+          .limit(limit)
+          .toArray();
+
+        res.send({
+          issues,
+          totalPages,
+          currentPage: page,
+          totalCount,
+        });
       } catch (err) {
-        res.status(500).send({ message: "Failed to fetch reports", err });
+        res
+          .status(500)
+          .send({ message: "Failed to fetch paginated reports", err });
       }
     });
 
     //! All citizen..
+
+    //
+
     app.get("/citizen", async (req, res) => {
       const result = await citizenCollection.find().toArray();
       res.send(result);
