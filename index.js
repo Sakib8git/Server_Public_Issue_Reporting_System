@@ -328,7 +328,7 @@ async function run() {
       }
     });
 
-    //! All citizen
+    //! All citizen..
     app.get("/citizen", async (req, res) => {
       const result = await citizenCollection.find().toArray();
       res.send(result);
