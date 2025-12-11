@@ -9,7 +9,13 @@ const port = process.env.PORT || 3000;
 const decoded = Buffer.from(process.env.FB_SERVICE_KEY, "base64").toString(
   "utf-8"
 );
-const serviceAccount = JSON.parse(decoded);
+// const serviceAccount = JSON.parse(decoded);
+// admin.initializeApp({
+//   credential: admin.credential.cert(serviceAccount),
+// });
+
+const serviceAccount = require("./serviceAccountKey.json");
+
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
 });
@@ -890,13 +896,51 @@ async function run() {
     //     res.status(500).send({ message: "Failed to insert report", err });
     //   }
     // });
+    // !-------------------------
+    // app.post("/staff", verifyJWT, verifyAdmin, async (req, res) => {
+    //   try {
+    //     const staffData = { ...req.body, createdAt: new Date() };
+
+    //     const result = await staffCollection.insertOne(staffData);
+    //     res.send(result);
+    //   } catch (err) {
+    //     res.status(500).send({ message: "Failed to insert staff", err });
+    //   }
+    // });
+
+    //Bug: Staff create route
     app.post("/staff", verifyJWT, verifyAdmin, async (req, res) => {
       try {
-        const staffData = { ...req.body, createdAt: new Date() };
+        const { name, email, phone, photo, password, role } = req.body;
+
+        // Firebase Admin SDK দিয়ে user তৈরি করো
+        const userRecord = await admin.auth().createUser({
+          email,
+          password,
+          displayName: name,
+          photoURL: photo,
+        });
+
+        // MongoDB তে staff save করো
+        const staffData = {
+          name,
+          email,
+          phone,
+          photo,
+          role: role || "staff",
+          firebaseUid: userRecord.uid,
+          createdAt: new Date(),
+        };
 
         const result = await staffCollection.insertOne(staffData);
-        res.send(result);
+
+        res.send({
+          success: true,
+          insertedId: result.insertedId,
+          firebaseUid: userRecord.uid,
+        });
       } catch (err) {
+        console.error("Failed to create staff:", err);
         res.status(500).send({ message: "Failed to insert staff", err });
       }
     });
