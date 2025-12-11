@@ -626,8 +626,8 @@ async function run() {
           metadata: {
             issueId, // ✅ store issueId in metadata
             email,
-            action: "boost", // ✅ mark this as boost payment
-            date: new Date().toISOString(), // ✅ add current date/time
+            action: "boost", 
+            date: new Date().toISOString(),
           },
           // success_url: `${process.env.CLIENT_DOMAIN}/high-pay-success?session_id={CHECKOUT_SESSION_ID}`,
           success_url: `${process.env.CLIENT_DOMAIN}/high-pay-success/${issueId}?session_id={CHECKOUT_SESSION_ID}`,
