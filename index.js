@@ -6,19 +6,20 @@ const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const admin = require("firebase-admin");
 const { default: Stripe } = require("stripe");
 const port = process.env.PORT || 3000;
-const decoded = Buffer.from(process.env.FB_SERVICE_KEY, "base64").toString(
-  "utf-8"
-);
+
+// const decoded = Buffer.from(process.env.FIREBASE_ADMIN_KEY_PATH, 'base64').toString('utf8')
+// const serviceAccount = JSON.parse(decoded);
+
+const serviceAccount = require(process.env.FIREBASE_ADMIN_KEY_PATH);
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
 // const serviceAccount = JSON.parse(decoded);
 // admin.initializeApp({
 //   credential: admin.credential.cert(serviceAccount),
 // });
 
-const serviceAccount = require(process.env.FIREBASE_ADMIN_KEY_PATH);
-
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-});
+// const serviceAccount = require("./serviceAccountKey.json");
 
 const app = express();
 // middleware
@@ -849,7 +850,7 @@ async function run() {
     });
 
     // get all staff
-    app.get("/staff", verifyJWT, verifyAdmin, async (req, res) => {
+    app.get("/staff",  async (req, res) => {
       try {
         const staff = await staffCollection.find().toArray();
         res.send(staff);
@@ -977,10 +978,10 @@ async function run() {
 
     //* ----------------------------
     // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
-    console.log(
-      "Pinged your deployment. You successfully connected to MongoDB!"
-    );
+    // await client.db("admin").command({ ping: 1 });
+    // console.log(
+    //   "Pinged your deployment. You successfully connected to MongoDB!"
+    // );
   } finally {
     // Ensures that the client will close when you finish/error
   }
