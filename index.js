@@ -16,7 +16,6 @@ admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
 });
 
-
 const app = express();
 // middleware
 app.use(
