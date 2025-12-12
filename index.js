@@ -7,10 +7,12 @@ const admin = require("firebase-admin");
 const { default: Stripe } = require("stripe");
 const port = process.env.PORT || 3000;
 
-// const decoded = Buffer.from(process.env.FIREBASE_ADMIN_KEY_PATH, 'base64').toString('utf8')
-// const serviceAccount = JSON.parse(decoded);
+const decoded = Buffer.from(process.env.FB_SERVICE_KEY, "base64").toString(
+  "utf8"
+);
+const serviceAccount = JSON.parse(decoded);
 
-const serviceAccount = require(process.env.FIREBASE_ADMIN_KEY_PATH);
+// const serviceAccount = require(process.env.FIREBASE_ADMIN_KEY_PATH);
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
 });
@@ -18,8 +20,6 @@ admin.initializeApp({
 // admin.initializeApp({
 //   credential: admin.credential.cert(serviceAccount),
 // });
-
-// const serviceAccount = require("./serviceAccountKey.json");
 
 const app = express();
 // middleware
@@ -89,9 +89,8 @@ async function run() {
     //! citizen
     const verifyCitizen = async (req, res, next) => {
       try {
-        const email = req.tokenEmail; // ✅ token থেকে আসা email
+        const email = req.tokenEmail;
 
-        // ✅ citizenCollection এ email দিয়ে খুঁজবো
         const citizen = await citizenCollection.findOne({ email });
 
         if (!citizen || citizen.role !== "citizen") {
@@ -126,7 +125,7 @@ async function run() {
       }
     };
     // ----------------
-    // comments post
+    //! comments post
     app.post("/comments", verifyJWT, async (req, res) => {
       try {
         const email = req.tokenEmail;
@@ -142,7 +141,7 @@ async function run() {
         res.status(500).send({ message: "Failed to insert comment", err });
       }
     });
-    // all comments
+    //! all comments
     app.get("/comments", async (req, res) => {
       try {
         const result = await commentsCollection
@@ -156,7 +155,7 @@ async function run() {
         res.status(500).send({ message: "Failed to fetch comments", err });
       }
     });
-    // roll of user
+    //! roll of user
     app.get("/user/role/:email", async (req, res) => {
       const email = req.params.email;
 
@@ -234,19 +233,14 @@ async function run() {
           .send({ message: "Failed to fetch paginated reports", err });
       }
     });
-
     //! All citizen..
-
-    //
-
     app.get("/citizen", async (req, res) => {
       const result = await citizenCollection.find().toArray();
       res.send(result);
 
       // console.log(result);
     });
-
-    // create citizen
+    //! create citizen
     app.post("/citizen", async (req, res) => {
       try {
         // add createdAt timestamp + role
@@ -263,25 +257,8 @@ async function run() {
       }
     });
 
-    //fixme: Latest Pending Issues (limit 6)
-    // app.get("/reports/pending", async (req, res) => {
-    //   try {
-    //     const result = await reportsCollection
-    //       .find({ status: { $regex: /^pending$/i } })
-    //       .sort({ createdAt: -1 })
-    //       .limit(6)
-    //       .toArray();
-    //     res.send(result);
-    //   } catch (err) {
-    //     res
-    //       .status(500)
-    //       .send({ message: "Failed to fetch pending issues", err });
-    //   }
-    // });
-    // --------------------------------------------
     //! issue Detaails
     // ! issue Details with staff info
-
     app.get("/reports/:id", async (req, res) => {
       try {
         const id = req.params.id;
@@ -307,16 +284,7 @@ async function run() {
         res.status(500).send({ message: "Failed to fetch issue details", err });
       }
     });
-    // app.get("/reports/:id", async (req, res) => {
-    //   const id = req.params.id;
-    //   const cursore = { _id: new ObjectId(id) };
-    //   const result = await reportsCollection.findOne(cursore);
-    //   res.send(result);
-
-    //   // console.log(result);
-    // });
     //! reports post---
-
     app.post("/reports", verifyJWT, verifyCitizen, async (req, res) => {
       try {
         const { reporter } = req.body;
@@ -347,18 +315,6 @@ async function run() {
         res.status(500).send({ message: "Failed to insert report", err });
       }
     });
-
-    // app.post("/reports", async (req, res) => {
-    //   try {
-    //     // add createdAt timestamp
-    //     const reportData = { ...req.body, createdAt: new Date() };
-
-    //     const result = await reportsCollection.insertOne(reportData);
-    //     res.send(result);
-    //   } catch (err) {
-    //     res.status(500).send({ message: "Failed to insert report", err });
-    //   }
-    // });
     //! upvote count
     app.patch(
       "/reports/:id/upvote",
@@ -485,7 +441,7 @@ async function run() {
         res.status(500).send({ message: "Failed to update issue", err });
       }
     });
-    // boost priority high
+    //note: boost priority high
     app.patch(
       "/reports/priority/:id",
       verifyJWT,
@@ -663,19 +619,6 @@ async function run() {
     });
     //! -----------------staff----------------------------------------------
     // GET /reports/assigned/:staffName
-    // app.get("/reports/assigned/:staffName", async (req, res) => {
-    //   try {
-    //     const staffName = req.params.staffName;
-    //     const issues = await reportsCollection
-    //       .find({ assignedStaff: staffName })
-    //       .toArray();
-    //     res.send(issues);
-    //   } catch (err) {
-    //     res
-    //       .status(500)
-    //       .send({ message: "Failed to fetch assigned issues", err });
-    //   }
-    // });
     app.get("/reports/assigned/:staffEmail", async (req, res) => {
       try {
         const staffEmail = req.params.staffEmail;
@@ -718,7 +661,6 @@ async function run() {
         }
       }
     );
-
     // get staff by email
     app.get("/staff/:email", async (req, res) => {
       try {
@@ -850,7 +792,7 @@ async function run() {
     });
 
     // get all staff
-    app.get("/staff",  async (req, res) => {
+    app.get("/staff", async (req, res) => {
       try {
         const staff = await staffCollection.find().toArray();
         res.send(staff);
@@ -858,23 +800,6 @@ async function run() {
         res.status(500).send({ message: "Failed to fetch staff", err });
       }
     });
-
-    // update staff
-    // app.patch("/staff/:id", async (req, res) => {
-    //   try {
-    //     const id = req.params.id;
-    //     const updateData = req.body; // frontend theke updated staff info asbe
-
-    //     const result = await staffCollection.updateOne(
-    //       { _id: new ObjectId(id) }, // filter
-    //       { $set: updateData } // update operation
-    //     );
-
-    //     res.send(result);
-    //   } catch (err) {
-    //     res.status(500).send({ message: "Failed to update staff", err });
-    //   }
-    // });
     // update staff
     app.patch("/staff/:id", verifyJWT, verifyAdmin, async (req, res) => {
       try {
@@ -907,18 +832,7 @@ async function run() {
         res.status(500).send({ message: "Failed to delete issue", err });
       }
     });
-
     // block citizen
-    // app.patch("/citizen/:id", async (req, res) => {
-    //   const id = req.params.id;
-    //   const { action } = req.body;
-    //   const result = await citizenCollection.updateOne(
-    //     { _id: new ObjectId(id) },
-    //     { $set: { action } }
-    //   );
-
-    //   res.send(result);
-    // });
     app.patch(
       "/citizen/action/:id",
       verifyJWT,
